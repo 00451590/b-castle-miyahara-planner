@@ -1,0 +1,23 @@
+{
+  "name": "B・キャッスル宮原 3階 1LDK",
+  "source": "SUUMO/ラテルーム掲載（内見前の推定）",
+  "listing": {
+    "address": "埼玉県さいたま市北区宮原町4丁目",
+    "station": "JR高崎線 宮原駅 徒歩約9〜10分",
+    "floor": "3階 / 3階建",
+    "area_m2": 41.91,
+    "layout": "1LDK",
+    "rooms": { "LDK": "10.38帖", "western": "6.41帖" },
+    "facing": "南東",
+    "built": "2012年3月",
+    "rent": "約7.8万円 + 管理費4,000円"
+  },
+  "estimate_note": "帖数と間取り図の比率から推定。内見で実測して縮尺を合わせてください。誤差±5〜10%想定。",
+  "estimates_cm": {
+    "western": { "w": 270, "d": 360, "note": "6.4帖 ≈10.4㎡。クローゼット込みの矩形想定" },
+    "ldk_main": { "w": 360, "d": 420, "note": "LDK本体（バルコニー側の広い部分）の目安" },
+    "kitchen_bay": { "depth": 160, "run": 240, "note": "キッチン前の細い帯の目安（壁〜壁）" },
+    "unit_outer": { "w": 600, "d": 760, "note": "バルコニー手前〜北側までの外郭目安" }
+  },
+  "scale_default": { "cmPerPxX": 1.29, "cmPerPxY": 1.31 }
+}

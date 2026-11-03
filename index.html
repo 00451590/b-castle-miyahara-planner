@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>B・キャッスル宮原 · 共同配置プランナー</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>B・キャッスル宮原 3階 1LDK</h1>
+      <p class="sub">41.91㎡ · LDK10.38帖 · 洋室6.41帖 · 内見前の推定寸法（±5〜10%）</p>
+    </div>
+    <div class="top-right">
+      <div class="room-bar">
+        <label>部屋コード
+          <input id="roomId" type="text" maxlength="32" placeholder="例: fuji-koga" />
+        </label>
+        <button type="button" id="btnJoin">共同編集を開始</button>
+        <span id="syncStatus" class="sync offline">ローカルのみ</span>
+      </div>
+      <div class="modes" role="tablist">
+        <button type="button" class="mode active" data-tab="plan" aria-selected="true">配置</button>
+        <button type="button" class="mode" data-tab="view3d" aria-selected="false">3D</button>
+        <button type="button" class="mode" data-tab="lists" aria-selected="false">リスト・予定</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- PLAN -->
+    <section id="tab-plan" class="tab active">
+      <aside class="sidebar">
+        <section>
+          <h2>家具を追加</h2>
+          <p class="hint">よくあるサイズを用意済み。下でカスタム追加も可。</p>
+          <div class="palette" id="palette"></div>
+        </section>
+
+        <section>
+          <h2>カスタム家具</h2>
+          <div class="custom-grid">
+            <input id="cName" type="text" placeholder="名前" />
+            <input id="cW" type="number" placeholder="幅cm" min="10" />
+            <input id="cD" type="number" placeholder="奥行cm" min="10" />
+            <input id="cH" type="number" placeholder="高さcm" min="10" value="70" />
+          </div>
+          <button type="button" id="btnCustom" class="full">カスタムを追加</button>
+        </section>
+
+        <section>
+          <h2>選択中</h2>
+          <div id="selection" class="selection empty">家具を選ぶと回転・削除できます</div>
+          <div class="sel-actions" id="selActions" hidden>
+            <button type="button" id="rotL">⟲ 90°</button>
+            <button type="button" id="rotR">90° ⟳</button>
+            <button type="button" id="dup">複製</button>
+            <button type="button" id="del" class="danger">削除</button>
+          </div>
+        </section>
+
+        <section>
+          <h2>縮尺（推定）</h2>
+          <p class="hint">間取り図px→cm。内見後に実測で合わせてください。</p>
+          <label class="field">横 cm/px
+            <input type="number" id="scaleX" step="0.001" value="1.29" />
+          </label>
+          <label class="field">縦 cm/px
+            <input type="number" id="scaleY" step="0.001" value="1.31" />
+          </label>
+        </section>
+
+        <section>
+          <h2>データ</h2>
+          <div class="row">
+            <button type="button" id="btnExport">JSON出力</button>
+            <button type="button" id="btnImport">JSON読込</button>
+            <button type="button" id="btnClear" class="danger">配置クリア</button>
+          </div>
+          <input type="file" id="importFile" accept="application/json,.json" hidden />
+          <p class="hint" id="saveMsg">自動保存しています</p>
+        </section>
+
+        <section class="estimate">
+          <h2>推定寸法メモ</h2>
+          <ul>
+            <li>洋室6.4帖：約 <b>270×360cm</b></li>
+            <li>LDK本体：約 <b>360×420cm</b></li>
+            <li>キッチン前の帯：奥行約 <b>160cm</b></li>
+            <li>外郭目安：約 <b>600×760cm</b></li>
+          </ul>
+        </section>
+      </aside>
+
+      <div class="stage-wrap">
+        <div class="canvas-tools">
+          <span>ドラッグ移動 · 空白ドラッグでパン · ホイールでズーム</span>
+          <button type="button" id="fit">全体表示</button>
+        </div>
+        <canvas id="c2d" aria-label="間取り配置"></canvas>
+      </div>
+    </section>
+
+    <!-- 3D -->
+    <section id="tab-view3d" class="tab" hidden>
+      <div class="stage-wrap full">
+        <div class="canvas-tools">
+          <span>ドラッグ回転 · 右ドラッグで平行移動 · ホイールズーム</span>
+          <button type="button" id="resetCam">視点リセット</button>
+        </div>
+        <div id="c3d"></div>
+      </div>
+    </section>
+
+    <!-- LISTS -->
+    <section id="tab-lists" class="tab" hidden>
+      <div class="lists-grid">
+        <article class="card">
+          <header>
+            <h2>買い物リスト</h2>
+            <button type="button" id="addShop">＋ 追加</button>
+          </header>
+          <div class="add-row">
+            <input id="shopText" type="text" placeholder="例: ソファベッド 幅120・脚付き" />
+            <input id="shopPrice" type="number" placeholder="予算円" min="0" />
+          </div>
+          <ul id="shopList" class="checklist"></ul>
+          <p class="sum">合計（チェック外）: <b id="shopSum">¥0</b></p>
+        </article>
+
+        <article class="card">
+          <header>
+            <h2>予定・ToDo</h2>
+            <button type="button" id="addTodo">＋ 追加</button>
+          </header>
+          <div class="add-row">
+            <input id="todoText" type="text" placeholder="例: 内見でキッチン前を測る" />
+            <input id="todoDate" type="date" />
+          </div>
+          <ul id="todoList" class="checklist"></ul>
+        </article>
+
+        <article class="card wide">
+          <header>
+            <h2>メモ（共有）</h2>
+          </header>
+          <textarea id="sharedNotes" rows="8" placeholder="内見で確認すること、好み、制約など…"></textarea>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/",
+      "yjs": "https://esm.sh/yjs@13.6.18",
+      "y-webrtc": "https://esm.sh/y-webrtc@10.3.0?deps=yjs@13.6.18",
+      "y-protocols/": "https://esm.sh/y-protocols@1.0.6/"
+    }
+  }
+  </script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
