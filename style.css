@@ -92,16 +92,59 @@ button.full { width: 100%; margin-top: 0.45rem; }
 }
 .hint { margin: 0 0 0.45rem; color: var(--muted); font-size: 0.74rem; line-height: 1.35; }
 
-.palette { display: grid; gap: 0.3rem; max-height: 38vh; overflow: auto; }
+.palette { display: grid; gap: 0.35rem; max-height: 38vh; overflow: auto; }
 .pal-item {
   text-align: left;
   display: grid;
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.pal-top { display: grid; grid-template-columns: 1fr auto; gap: 0.25rem; align-items: start; }
+.pal-add {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: grid;
   gap: 0.05rem;
-  padding: 0.45rem 0.55rem;
+}
+.pal-add strong { font-size: 0.8rem; }
+.pal-add span { color: var(--muted); font-size: 0.68rem; }
+.pal-del {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0.1rem 0.35rem;
+  line-height: 1;
+}
+.pal-del:hover { color: var(--danger); }
+.pal-size, .sel-size {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.25rem;
+}
+.pal-size label, .sel-size label {
+  display: grid;
+  gap: 0.1rem;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+.pal-size input, .sel-size input {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.3rem 0.35rem;
+  width: 100%;
   background: #fff;
 }
-.pal-item strong { font-size: 0.8rem; }
-.pal-item span { color: var(--muted); font-size: 0.68rem; }
+.sel-size { margin: 0.4rem 0; }
+button.subtle {
+  margin-top: 0.45rem;
+  background: #f3eee4;
+  font-size: 0.78rem;
+}
 
 .custom-grid {
   display: grid;

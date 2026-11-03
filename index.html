@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>B・キャッスル宮原 · 二人用プランナー</title>
-  <link rel="stylesheet" href="style.css?v=3" />
+  <link rel="stylesheet" href="style.css?v=4" />
 </head>
 <body>
   <header class="top">
@@ -22,24 +22,30 @@
     <aside class="sidebar">
       <section>
         <h2>家具を追加</h2>
-        <p class="hint">クリックで配置。ドラッグで移動、Rで回転。</p>
+        <p class="hint">名前クリックで配置。幅・奥・高を直接変更、✕で選択肢から削除。</p>
         <div class="palette" id="palette"></div>
+        <button type="button" id="btnResetCatalog" class="full subtle">初期の選択肢に戻す</button>
       </section>
 
       <section>
-        <h2>カスタム</h2>
+        <h2>カスタムを選択肢に追加</h2>
         <div class="custom-grid">
           <input id="cName" type="text" placeholder="名前" />
           <input id="cW" type="number" placeholder="幅cm" min="10" />
           <input id="cD" type="number" placeholder="奥行cm" min="10" />
           <input id="cH" type="number" placeholder="高さcm" min="10" value="70" />
         </div>
-        <button type="button" id="btnCustom" class="full">追加</button>
+        <button type="button" id="btnCustom" class="full">選択肢に追加</button>
       </section>
 
       <section>
-        <h2>選択中</h2>
+        <h2>選択中（配置済み）</h2>
         <div id="selection" class="selection empty">家具を選ぶと操作できます</div>
+        <div class="sel-size" id="selSize" hidden>
+          <label>幅<input type="number" id="selW" min="1" /></label>
+          <label>奥<input type="number" id="selD" min="1" /></label>
+          <label>高<input type="number" id="selH" min="1" /></label>
+        </div>
         <div class="sel-actions" id="selActions" hidden>
           <button type="button" id="rotL">⟲ 90°</button>
           <button type="button" id="rotR">90° ⟳</button>
@@ -125,6 +131,6 @@
     }
   }
   </script>
-  <script type="module" src="app.js?v=3"></script>
+  <script type="module" src="app.js?v=4"></script>
 </body>
 </html>

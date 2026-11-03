@@ -36,9 +36,10 @@ const CATALOG = [
 
 const LS_KEY = "b-castle-miyahara-v1";
 const DEFAULT_ROOM = "shared";
-const customCatalog = new Map();
+const DEFAULT_CATALOG = CATALOG.map((c) => ({ ...c }));
 
 const state = {
+  catalog: DEFAULT_CATALOG.map((c) => ({ ...c })),
   items: [],
   shop: [],
   todos: [],
@@ -80,9 +81,20 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function findCatalog(id) {
+  return state.catalog.find((c) => c.id === id) || null;
+}
+
 function catalogOf(item) {
-  if (item.custom) return item.custom;
-  return customCatalog.get(item.type) || CATALOG.find((c) => c.id === item.type);
+  const base = item.custom || findCatalog(item.type);
+  if (!base) return null;
+  return {
+    ...base,
+    w: item.w ?? base.w,
+    d: item.d ?? base.d,
+    h: item.h ?? base.h,
+    name: item.name || base.name,
+  };
 }
 
 function selected() {
@@ -91,6 +103,7 @@ function selected() {
 
 function snapshot() {
   return {
+    catalog: state.catalog,
     items: state.items,
     shop: state.shop,
     todos: state.todos,
@@ -103,6 +116,9 @@ function snapshot() {
 function applySnapshot(data, { fromRemote = false } = {}) {
   if (!data) return;
   state.suppressSync = true;
+  if (Array.isArray(data.catalog) && data.catalog.length) {
+    state.catalog = data.catalog.map((c) => ({ ...c }));
+  }
   state.items = Array.isArray(data.items) ? data.items : [];
   state.shop = Array.isArray(data.shop) ? data.shop : [];
   state.todos = Array.isArray(data.todos) ? data.todos : [];
@@ -118,6 +134,7 @@ function applySnapshot(data, { fromRemote = false } = {}) {
   if (state.selectedId && !state.items.some((i) => i.id === state.selectedId)) {
     state.selectedId = null;
   }
+  renderPalette();
   renderLists();
   updateSelectionUI();
   draw2d();
@@ -294,10 +311,6 @@ function addFromCatalog(cat, at) {
     y: at?.y ?? ws.h * 0.45,
     rot: 0,
   };
-  if (!CATALOG.find((c) => c.id === cat.id)) {
-    item.custom = { ...cat };
-    customCatalog.set(cat.id, item.custom);
-  }
   state.items.push(item);
   state.selectedId = item.id;
   updateSelectionUI();
@@ -306,30 +319,68 @@ function addFromCatalog(cat, at) {
   rebuild3d();
 }
 
+function updateCatalogSize(id, patch) {
+  const cat = findCatalog(id);
+  if (!cat) return;
+  if (patch.w != null) cat.w = Math.max(1, Number(patch.w) || cat.w);
+  if (patch.d != null) cat.d = Math.max(1, Number(patch.d) || cat.d);
+  if (patch.h != null) cat.h = Math.max(1, Number(patch.h) || cat.h);
+  if (patch.name != null) cat.name = String(patch.name).trim() || cat.name;
+  schedulePersist();
+  renderPalette();
+  updateSelectionUI();
+  draw2d();
+  rebuild3d();
+}
+
+function removeCatalog(id) {
+  state.catalog = state.catalog.filter((c) => c.id !== id);
+  schedulePersist();
+  renderPalette();
+}
+
 function renderPalette() {
   els.palette.innerHTML = "";
-  for (const cat of CATALOG) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pal-item";
-    btn.innerHTML = `<strong>${cat.name}</strong><span>${cat.w}×${cat.d}×${cat.h}cm ${cat.note || ""}</span>`;
-    btn.addEventListener("click", () => addFromCatalog(cat));
-    els.palette.appendChild(btn);
+  for (const cat of state.catalog) {
+    const row = document.createElement("div");
+    row.className = "pal-item";
+    row.innerHTML = `
+      <div class="pal-top">
+        <button type="button" class="pal-add" data-add="${cat.id}">
+          <strong>${escapeHtml(cat.name)}</strong>
+          <span>${cat.note ? escapeHtml(cat.note) : "クリックで配置"}</span>
+        </button>
+        <button type="button" class="pal-del" data-del-cat="${cat.id}" title="選択肢から削除">✕</button>
+      </div>
+      <div class="pal-size">
+        <label>幅<input type="number" min="1" step="1" value="${cat.w}" data-cat="${cat.id}" data-dim="w" /></label>
+        <label>奥<input type="number" min="1" step="1" value="${cat.d}" data-cat="${cat.id}" data-dim="d" /></label>
+        <label>高<input type="number" min="1" step="1" value="${cat.h}" data-cat="${cat.id}" data-dim="h" /></label>
+      </div>`;
+    els.palette.appendChild(row);
   }
 }
 
 function updateSelectionUI() {
   const item = selected();
+  const sizeFields = document.getElementById("selSize");
   if (!item) {
     els.selection.classList.add("empty");
-    els.selection.textContent = "家具を選ぶと回転・削除できます";
+    els.selection.textContent = "家具を選ぶと回転・寸法・削除できます";
     els.selActions.hidden = true;
+    if (sizeFields) sizeFields.hidden = true;
     return;
   }
   const cat = catalogOf(item);
   els.selection.classList.remove("empty");
-  els.selection.innerHTML = `<b>${cat?.name || item.type}</b><br>${cat?.w}×${cat?.d}×${cat?.h}cm · 回転 ${item.rot}°`;
+  els.selection.innerHTML = `<b>${escapeHtml(cat?.name || item.type)}</b><br>回転 ${item.rot}°`;
   els.selActions.hidden = false;
+  if (sizeFields) {
+    sizeFields.hidden = false;
+    document.getElementById("selW").value = cat?.w ?? "";
+    document.getElementById("selD").value = cat?.d ?? "";
+    document.getElementById("selH").value = cat?.h ?? "";
+  }
 }
 
 function renderLists() {
@@ -562,6 +613,33 @@ els.scaleY.addEventListener("change", () => {
   rebuild3d();
 });
 
+els.palette.addEventListener("click", (e) => {
+  const add = e.target.closest("[data-add]");
+  if (add) {
+    const cat = findCatalog(add.dataset.add);
+    if (cat) addFromCatalog(cat);
+    return;
+  }
+  const del = e.target.closest("[data-del-cat]");
+  if (del) {
+    removeCatalog(del.dataset.delCat);
+  }
+});
+els.palette.addEventListener("change", (e) => {
+  const input = e.target.closest("input[data-cat][data-dim]");
+  if (!input) return;
+  updateCatalogSize(input.dataset.cat, { [input.dataset.dim]: input.value });
+});
+
+document.getElementById("btnResetCatalog").addEventListener("click", () => {
+  if (!confirm("選択肢を最初の一覧に戻しますか？（配置済み家具はそのまま）")) return;
+  state.catalog = DEFAULT_CATALOG.map((c) => ({ ...c }));
+  renderPalette();
+  schedulePersist();
+  draw2d();
+  rebuild3d();
+});
+
 document.getElementById("btnCustom").addEventListener("click", () => {
   const name = document.getElementById("cName").value.trim() || "カスタム";
   const w = Number(document.getElementById("cW").value);
@@ -573,8 +651,30 @@ document.getElementById("btnCustom").addEventListener("click", () => {
   }
   const id = `custom-${uid()}`;
   const cat = { id, name, w, d, h, color: "#9a7b9c", note: "カスタム" };
-  customCatalog.set(id, cat);
+  state.catalog.push(cat);
+  renderPalette();
   addFromCatalog(cat);
+  document.getElementById("cName").value = "";
+  document.getElementById("cW").value = "";
+  document.getElementById("cD").value = "";
+});
+
+function applySelectedSize() {
+  const item = selected();
+  if (!item) return;
+  const w = Number(document.getElementById("selW").value);
+  const d = Number(document.getElementById("selD").value);
+  const h = Number(document.getElementById("selH").value);
+  if (w > 0) item.w = w;
+  if (d > 0) item.d = d;
+  if (h > 0) item.h = h;
+  updateSelectionUI();
+  schedulePersist();
+  draw2d();
+  rebuild3d();
+}
+["selW", "selD", "selH"].forEach((id) => {
+  document.getElementById(id).addEventListener("change", applySelectedSize);
 });
 
 document.getElementById("rotL").addEventListener("click", () => {
