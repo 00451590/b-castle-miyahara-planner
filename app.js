@@ -163,30 +163,50 @@ function worldSize() {
   };
 }
 
-function resizeCanvas() {
+function stageSize(el) {
+  const r = el.getBoundingClientRect();
+  return {
+    w: Math.max(1, Math.floor(r.width)),
+    h: Math.max(1, Math.floor(r.height)),
+  };
+}
+
+function resizeCanvas({ fit = false } = {}) {
   const wrap = els.canvas.parentElement;
+  const { w, h } = stageSize(wrap);
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const w = wrap.clientWidth;
-  const h = Math.max(320, wrap.clientHeight);
   els.canvas.width = Math.floor(w * dpr);
   els.canvas.height = Math.floor(h * dpr);
-  els.canvas.style.width = `${w}px`;
-  els.canvas.style.height = `${h}px`;
+  // Keep CSS size at 100% of parent — never set px width (avoids grid blowout)
+  els.canvas.style.width = "100%";
+  els.canvas.style.height = "100%";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  draw2d();
+  if (fit || !state.cam.zoom) fitView();
+  else draw2d();
 }
 
 function fitView() {
-  if (!state.img) return;
-  const w = els.canvas.clientWidth;
-  const h = els.canvas.clientHeight;
+  if (!state.img) {
+    draw2d();
+    return;
+  }
+  const { w, h } = stageSize(els.canvas.parentElement);
   const ws = worldSize();
   const pad = 36;
   const zoom = Math.min((w - pad) / ws.w, (h - pad) / ws.h);
-  state.cam.zoom = zoom;
-  state.cam.x = (w - ws.w * zoom) / 2;
-  state.cam.y = (h - ws.h * zoom) / 2;
+  state.cam.zoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  state.cam.x = (w - ws.w * state.cam.zoom) / 2;
+  state.cam.y = (h - ws.h * state.cam.zoom) / 2;
   draw2d();
+}
+
+function resize3d() {
+  if (!three) return;
+  const host = els.c3d;
+  const { w, h } = stageSize(host);
+  three.camera.aspect = w / Math.max(h, 1);
+  three.camera.updateProjectionMatrix();
+  three.renderer.setSize(w, h, false);
 }
 
 function screenToWorld(sx, sy) {
@@ -214,8 +234,7 @@ function hitTest(wx, wy) {
 }
 
 function draw2d() {
-  const w = els.canvas.clientWidth;
-  const h = els.canvas.clientHeight;
+  const { w, h } = stageSize(els.canvas.parentElement);
   if (!w || !h) return;
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = "#ddd7ce";
@@ -378,17 +397,10 @@ function init3d() {
   const group = new THREE.Group();
   scene.add(group);
 
+  renderer.domElement.style.width = "100%";
+  renderer.domElement.style.height = "100%";
   three = { scene, camera, renderer, controls, group, floor: null };
-
-  const resize = () => {
-    const w = host.clientWidth;
-    const h = host.clientHeight || 480;
-    camera.aspect = w / Math.max(h, 1);
-    camera.updateProjectionMatrix();
-    renderer.setSize(w, h, false);
-  };
-  resize();
-  window.addEventListener("resize", resize);
+  resize3d();
 
   const loop = () => {
     requestAnimationFrame(loop);
@@ -471,41 +483,46 @@ function setSync(status, text) {
 function joinRoom(room) {
   const name = (room || DEFAULT_ROOM).trim().toLowerCase().replace(/[^a-z0-9\-]/g, "").slice(0, 32) || DEFAULT_ROOM;
 
-  if (provider) {
-    provider.destroy();
-    provider = null;
-  }
-  if (ydoc) {
-    ydoc.destroy();
-    ydoc = null;
-  }
-
-  setSync("connecting", "同期中…");
-  ydoc = new Y.Doc();
-  ymap = ydoc.getMap("shared");
-  provider = new WebrtcProvider(`b-castle-miyahara-${name}`, ydoc, {
-    signaling: ["wss://signaling.yjs.dev"],
-  });
-
-  provider.on("status", ({ connected }) => {
-    setSync(connected ? "online" : "connecting", connected ? "二人で同期中" : "同期接続中…");
-  });
-  provider.on("peers", ({ webrtcPeers }) => {
-    const n = (webrtcPeers?.length || 0) + 1;
-    if (provider.connected) {
-      setSync("online", n > 1 ? `同期中 · ${n}人接続` : "同期中 · 相手の接続待ち");
+  try {
+    if (provider) {
+      provider.destroy();
+      provider = null;
     }
-  });
+    if (ydoc) {
+      ydoc.destroy();
+      ydoc = null;
+    }
 
-  ymap.observe(() => {
-    if (state.suppressSync) return;
-    const remote = ymap.get("state");
-    if (remote) applySnapshot(remote, { fromRemote: true });
-  });
+    setSync("connecting", "同期接続中…");
+    ydoc = new Y.Doc();
+    ymap = ydoc.getMap("shared");
+    provider = new WebrtcProvider(`b-castle-miyahara-${name}`, ydoc, {
+      signaling: ["wss://signaling.yjs.dev"],
+    });
 
-  setTimeout(() => {
-    if (!ymap.get("state")) pushRemote();
-  }, 800);
+    provider.on("status", ({ connected }) => {
+      if (!connected) setSync("connecting", "同期接続中…");
+    });
+    provider.on("peers", ({ webrtcPeers }) => {
+      const n = (webrtcPeers?.length || 0) + 1;
+      if (provider?.connected) {
+        setSync("online", n > 1 ? `同期中 · ${n}人` : "同期中 · 相手の接続待ち");
+      }
+    });
+
+    ymap.observe(() => {
+      if (state.suppressSync) return;
+      const remote = ymap.get("state");
+      if (remote) applySnapshot(remote, { fromRemote: true });
+    });
+
+    setTimeout(() => {
+      if (ymap && !ymap.get("state")) pushRemote();
+    }, 800);
+  } catch (err) {
+    console.error(err);
+    setSync("offline", "ローカルのみ（同期失敗）");
+  }
 }
 
 /* ---------- Events ---------- */
@@ -784,32 +801,49 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-window.addEventListener("resize", () => {
-  resizeCanvas();
-  if (three) {
-    const host = els.c3d;
-    const w = host.clientWidth;
-    const h = host.clientHeight || 240;
-    three.camera.aspect = w / Math.max(h, 1);
-    three.camera.updateProjectionMatrix();
-    three.renderer.setSize(w, h, false);
-  }
-});
+function layoutAll({ fit = false } = {}) {
+  resizeCanvas({ fit });
+  resize3d();
+}
+
+window.addEventListener("resize", () => layoutAll());
+
+const ro = new ResizeObserver(() => layoutAll());
+ro.observe(els.canvas.parentElement);
+ro.observe(els.c3d);
 
 /* boot */
+window.addEventListener("error", (e) => {
+  console.error(e.error || e.message);
+  setSync("offline", "エラーあり（コンソール参照）");
+});
+window.addEventListener("unhandledrejection", (e) => {
+  console.error(e.reason);
+});
+
 renderPalette();
 loadLocal();
-init3d();
+
+try {
+  init3d();
+} catch (err) {
+  console.error(err);
+  setSync("offline", "3D初期化失敗");
+}
+
 joinRoom(DEFAULT_ROOM);
 
 const img = new Image();
+img.decoding = "async";
 img.onload = () => {
   state.img = img;
-  resizeCanvas();
-  fitView();
+  layoutAll({ fit: true });
   rebuild3d();
 };
-img.src = "madori.jpg";
+img.onerror = () => {
+  setSync("offline", "間取り画像の読み込み失敗");
+};
+img.src = new URL("madori.jpg", import.meta.url).href;
 
 if (!state.shop.length) {
   state.shop = [
@@ -832,4 +866,4 @@ if (!state.notes) {
 }
 renderLists();
 persistLocal();
-resizeCanvas();
+requestAnimationFrame(() => layoutAll({ fit: true }));
