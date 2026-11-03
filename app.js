@@ -35,6 +35,7 @@ const CATALOG = [
 ];
 
 const LS_KEY = "b-castle-miyahara-v1";
+const DEFAULT_ROOM = "shared";
 const customCatalog = new Map();
 
 const state = {
@@ -61,7 +62,6 @@ const els = {
   scaleX: document.getElementById("scaleX"),
   scaleY: document.getElementById("scaleY"),
   saveMsg: document.getElementById("saveMsg"),
-  roomId: document.getElementById("roomId"),
   syncStatus: document.getElementById("syncStatus"),
   shopList: document.getElementById("shopList"),
   todoList: document.getElementById("todoList"),
@@ -469,15 +469,7 @@ function setSync(status, text) {
 }
 
 function joinRoom(room) {
-  const name = (room || "").trim().toLowerCase().replace(/[^a-z0-9\-]/g, "").slice(0, 32);
-  if (!name) {
-    alert("部屋コードを入れてください（英数字）");
-    return;
-  }
-  els.roomId.value = name;
-  const url = new URL(location.href);
-  url.searchParams.set("room", name);
-  history.replaceState(null, "", url);
+  const name = (room || DEFAULT_ROOM).trim().toLowerCase().replace(/[^a-z0-9\-]/g, "").slice(0, 32) || DEFAULT_ROOM;
 
   if (provider) {
     provider.destroy();
@@ -488,7 +480,7 @@ function joinRoom(room) {
     ydoc = null;
   }
 
-  setSync("connecting", "接続中…");
+  setSync("connecting", "同期中…");
   ydoc = new Y.Doc();
   ymap = ydoc.getMap("shared");
   provider = new WebrtcProvider(`b-castle-miyahara-${name}`, ydoc, {
@@ -496,12 +488,12 @@ function joinRoom(room) {
   });
 
   provider.on("status", ({ connected }) => {
-    setSync(connected ? "online" : "connecting", connected ? `同期中 · ${name}` : "接続中…");
+    setSync(connected ? "online" : "connecting", connected ? "二人で同期中" : "同期接続中…");
   });
   provider.on("peers", ({ webrtcPeers }) => {
-    const n = webrtcPeers?.length || 0;
+    const n = (webrtcPeers?.length || 0) + 1;
     if (provider.connected) {
-      setSync("online", `同期中 · ${name} · ${n + 1}人`);
+      setSync("online", n > 1 ? `同期中 · ${n}人接続` : "同期中 · 相手の接続待ち");
     }
   });
 
@@ -511,40 +503,26 @@ function joinRoom(room) {
     if (remote) applySnapshot(remote, { fromRemote: true });
   });
 
-  // seed if empty after short wait
   setTimeout(() => {
-    if (!ymap.get("state")) {
-      pushRemote();
-    }
+    if (!ymap.get("state")) pushRemote();
   }, 800);
 }
 
 /* ---------- Events ---------- */
-function switchTab(name) {
-  document.querySelectorAll(".mode").forEach((b) => {
-    const on = b.dataset.tab === name;
-    b.classList.toggle("active", on);
-    b.setAttribute("aria-selected", on ? "true" : "false");
-  });
-  document.querySelectorAll(".tab").forEach((t) => {
-    const on = t.id === `tab-${name}`;
-    t.classList.toggle("active", on);
-    t.hidden = !on;
-  });
-  if (name === "plan") {
-    resizeCanvas();
+document.getElementById("btnCopy").addEventListener("click", async () => {
+  const url = location.href.split("?")[0].split("#")[0];
+  try {
+    await navigator.clipboard.writeText(url);
+    const btn = document.getElementById("btnCopy");
+    const prev = btn.textContent;
+    btn.textContent = "コピーしました";
+    setTimeout(() => {
+      btn.textContent = prev;
+    }, 1500);
+  } catch {
+    prompt("このURLを彼女に送ってください", url);
   }
-  if (name === "view3d") {
-    init3d();
-    rebuild3d();
-  }
-}
-
-document.querySelectorAll(".mode").forEach((b) => {
-  b.addEventListener("click", () => switchTab(b.dataset.tab));
 });
-
-document.getElementById("btnJoin").addEventListener("click", () => joinRoom(els.roomId.value));
 document.getElementById("fit").addEventListener("click", fitView);
 document.getElementById("resetCam").addEventListener("click", () => {
   if (!three) return;
@@ -807,12 +785,22 @@ window.addEventListener("keydown", (e) => {
 });
 
 window.addEventListener("resize", () => {
-  if (document.getElementById("tab-plan").classList.contains("active")) resizeCanvas();
+  resizeCanvas();
+  if (three) {
+    const host = els.c3d;
+    const w = host.clientWidth;
+    const h = host.clientHeight || 240;
+    three.camera.aspect = w / Math.max(h, 1);
+    three.camera.updateProjectionMatrix();
+    three.renderer.setSize(w, h, false);
+  }
 });
 
 /* boot */
 renderPalette();
 loadLocal();
+init3d();
+joinRoom(DEFAULT_ROOM);
 
 const img = new Image();
 img.onload = () => {
@@ -822,13 +810,6 @@ img.onload = () => {
   rebuild3d();
 };
 img.src = "madori.jpg";
-
-const params = new URLSearchParams(location.search);
-const room = params.get("room");
-if (room) {
-  els.roomId.value = room;
-  joinRoom(room);
-}
 
 if (!state.shop.length) {
   state.shop = [
@@ -851,3 +832,4 @@ if (!state.notes) {
 }
 renderLists();
 persistLocal();
+resizeCanvas();
